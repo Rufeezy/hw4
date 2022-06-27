@@ -1,0 +1,31 @@
+FROM mysql:debian
+
+RUN apt update && apt install wget gcc build-essential manpages-dev libncurses5-dev libncursesw5-dev  perl -y && \
+	wget https://cmake.org/files/v3.7/cmake-3.7.2.tar.gz && \
+	tar -zxvf cmake-3.7.2.tar.gz && \
+	cd cmake-3.7.2 && ./bootstrap && \
+	make && make install
+
+RUN mkdir -p /home/mysql/{data,log,tmp} && \
+	chown -R mysql:mysql /home/mysql/ && \
+	wget http://mirrors.163.com/mysql/Downloads/MySQL-5.7/mysql-boost-5.7.36.tar.gz && \
+	tar -zxvf mysql-boost-5.7.36.tar.gz && \
+	cmake . -DCMAKE_INSTALL_PREFIX=/home/mysql -DMYSQL_DATADIR=/home/mysql/data -DDEFAULT_CHARSET=utf8 -DDEFAULT_COLLATION=utf8_general_ci -DMYSQL_TCP_PORT=3306 -DMYSQL_USER=mysql -DWITH_MYISAM_STORAGE_ENGINE=1 -DWITH_INNOBASE_STORAGE_ENGINE=1 -DWITH_ARCHIVE_STORAGE_ENGINE=1 -DWITH_BLACKHOLE_STORAGE_ENGINE=1 -DWITH_MEMORY_STORAGE_ENGINE=1 -DENABLE_DOWNLOADS=1 -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/home/mysql-boost-5.7.36.tar.gz/boost && \
+	make && make install
+
+CMD ["echo", "export PATH=$PATH:/home/mysql/bin">>/etc/profile"", "source", "/etc/profile"]
+
+COPY ./my.cnf /etc/
+
+RUN mysqld --defaults-file=/etc/my.cnf --initialize --datadir=/data/mysql/data --user=mysql --basedir=/home/mysql && \
+	mysqld_safe --defaults-file=/etc/my.cnf
+
+COPY /home/mysql/support-files/mysql.server /etc/init.d/mysqld
+
+RUN /etc/init.d/mysqld stop && \
+	mysqld_safe --skip-grant-tables --skip-networking && \
+	mysql -p && update mysql.user set authentication_string=password('1') where user='root' and Host = 'localhost'
+
+USER mysql
+
+EXPOSE 3306
